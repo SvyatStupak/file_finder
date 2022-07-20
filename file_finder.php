@@ -49,15 +49,16 @@ class FileFinderImplementation implements FileFinderInterface
 {
     protected $dirsArr = [];
     protected $mode = [];
-    protected $matchMode = [];
+    protected $matchMode;
     protected $inDir = false;
 
     public function inDir(string $directory): self
     {
-        
+
         if (is_dir($directory)) {
             $this->inDir = true;
-            $this->dirsArr[$directory] = array_diff(scandir($directory), ['..', '.']);
+            $this->dirsArr[$directory] = $this->getFiles($directory);
+
             foreach ($this->mode as $mode) {
                 if ($mode === 'onlyFiles') {
                     $this->onlyFiles();
@@ -67,8 +68,8 @@ class FileFinderImplementation implements FileFinderInterface
                 }
             }
 
-            foreach ($this->matchMode as $regEx) {
-                $this->match($regEx);
+            if ($this->matchMode) {
+                $this->match($this->matchMode);
             }
 
             return $this;
@@ -85,8 +86,8 @@ class FileFinderImplementation implements FileFinderInterface
     {
         $this->mode[] = 'onlyFiles';
         $resArr = [];
-        foreach ($this->dirsArr as $path => $value) {
-            foreach (glob($path . '*') as $file) {
+        foreach ($this->dirsArr as $path => $files) {
+            foreach ($files as $file) {
                 if (is_file($file)) {
                     $resArr[$path][] = $file;
                 }
@@ -100,8 +101,8 @@ class FileFinderImplementation implements FileFinderInterface
     {
         $this->mode[] = 'onlyDirectories';
         $resArr = [];
-        foreach ($this->dirsArr as $path => $value) {
-            foreach (glob($path . '*') as $file) {
+        foreach ($this->dirsArr as $path => $files) {
+            foreach ($files as $file) {
                 if (is_dir($file)) {
                     $resArr[$path][] = $file;
                 }
@@ -113,11 +114,11 @@ class FileFinderImplementation implements FileFinderInterface
 
     public function match(string $regularExpression): self
     {
-        $this->matchMode[] = $regularExpression;
+        $this->matchMode = $regularExpression;
 
         $resArr = [];
-        foreach ($this->dirsArr as $path => $value) {
-            foreach (glob($path . '*') as $file) {
+        foreach ($this->dirsArr as $path => $files) {
+            foreach ($files as $file) {
                 if (preg_match($regularExpression, $file, $matches)) {
                     $resArr[$path][] = $file;
                 }
@@ -140,62 +141,75 @@ class FileFinderImplementation implements FileFinderInterface
         if (!$this->inDir) throw new \Exception('You need to specify the directory!');
         return $resArr;
     }
+
+
+    public function getFiles($dir)
+    {
+        $dir .= substr($dir, -1) == '/' ? '' : '/';
+        $dirInfo = array();
+        foreach (glob($dir . '*') as $v) {
+            $dirInfo[] = $v;
+            if (is_dir($v)) {
+                $dirInfo = array_merge($dirInfo, $this->getFiles($v));
+            }
+        }
+        return $dirInfo;
+    }
 }
 
-$finder = new FileFinderImplementation();
 
-$finder
-  ->onlyFiles()
-  ->inDir('/etc/')
-  ->inDir('/var/log/')
-  ->match('/.*\.conf$/');
-foreach ($finder->find() as $file) {
-  print $file . "\n";
-}
-print "\n\n";
-
-
-// # search for all files in /tmp
-$finder = (new FileFinderImplementation())
-  ->onlyFiles()
-  ->inDir('/tmp');
-foreach ($finder->find() as $file) {
-  print $file . "\n";
-}
-print "\n\n";
+// $finder
+//   ->onlyFiles()
+//   ->inDir('/etc/')
+//   ->inDir('/var/log/')
+//   ->match('/.*\.conf$/');
+// foreach ($finder->find() as $file) {
+//   print $file . "\n";
+// }
+// print "\n\n";
 
 
-// # search for .doc files in /tmp
-$finder = (new FileFinderImplementation())
-  ->match('/.*\.doc$/')
-  ->onlyFiles()
-  ->inDir('/tmp');
-foreach ($finder->find() as $file) {
-  print $file . "\n";
-}
-print "\n\n";
+// // # search for all files in /tmp
+// $finder = (new FileFinderImplementation())
+//   ->onlyFiles()
+//   ->inDir('/tmp');
+// foreach ($finder->find() as $file) {
+//   print $file . "\n";
+// }
+// print "\n\n";
 
 
-// # list all directories in /var
-$finder = (new FileFinderImplementation())
-  ->onlyDirectories()
-  ->inDir('/var/log/');
-foreach ($finder->find() as $file) {
-  print $file . "\n";
-}
-print "\n\n";
+// // # search for .doc files in /tmp
+// $finder = (new FileFinderImplementation())
+//   ->match('/.*\.doc$/')
+//   ->onlyFiles()
+//   ->inDir('/tmp');
+// foreach ($finder->find() as $file) {
+//   print $file . "\n";
+// }
+// print "\n\n";
 
 
-# should throw an exception if no directories were provided
-try {
-  $files = (new FileFinderImplementation())
-    ->onlyFiles()
-    ->match('/.*\.ini$/')
-    ->find(); # -> exception
-  print "When no dir were provided: exception was not thrown, something does not work correctly\n";
-} catch (\Exception $exception) {
-  print "When no dir were provided: exception was thrown with message \"" . $exception->getMessage() . "\"\n";
-}
+// // # list all directories in /var
+// $finder = (new FileFinderImplementation())
+//   ->onlyDirectories()
+//   ->inDir('/var/log/');
+// foreach ($finder->find() as $file) {
+//   print $file . "\n";
+// }
+// print "\n\n";
+
+
+// # should throw an exception if no directories were provided
+// try {
+//   $files = (new FileFinderImplementation())
+//     ->onlyFiles()
+//     ->match('/.*\.ini$/')
+//     ->find(); # -> exception
+//   print "When no dir were provided: exception was not thrown, something does not work correctly\n";
+// } catch (\Exception $exception) {
+//   print "When no dir were provided: exception was thrown with message \"" . $exception->getMessage() . "\"\n";
+// }
 
 
 
